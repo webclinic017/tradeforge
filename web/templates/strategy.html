@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<h2>{{ strategy.name }}</h2>
+
+<table class="ui striped table">
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Name</th>
+        </tr>
+    </thead>
+    {% for stock in stocks %}
+    <tr>
+        <td>{{ stock.symbol }}</td>
+        <td><a href="/stock/{{ stock.symbol }}">{{ stock.name }}</a></td>
+        <td>
+            <form method="POST" action="/delete_strategy">
+                <input type="hidden" name="strategy_id" value="{{ strategy.id }}">
+                <input type="hidden" name="stock_id" value="{{ stock.id }}">
+                <input type="submit" value="Delete Strategy" class="ui button">
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+{% endblock %}

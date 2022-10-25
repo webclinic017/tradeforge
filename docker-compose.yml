@@ -1,0 +1,27 @@
+version: "3.7"
+
+services:
+  timescale:
+    image: timescale/timescaledb:latest-pg12
+    container_name: timescale
+    restart: unless-stopped
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=timescale
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=timescale
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+  web:
+    build: .
+    image: web
+    container_name: web
+    command: uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+    volumes:
+      - .:/app
+    restart: unless-stopped
+    ports:
+      - 8080:8080
+    depends_on:
+      - timescale
