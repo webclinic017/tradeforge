@@ -1,13 +1,14 @@
 import psycopg2, psycopg2.extras, requests
 import pandas as pd
+import numpy as np
 from datetime import datetime, date, timedelta
 from iexfinance.stocks import Stock, get_historical_intraday, get_historical_data
 from config.config import *
 from send_raw_mail import *
 
 #store the current date or a custom date for testing
-today = date.today()
-# today = datetime(2022, 10, 21)
+# today = date.today()
+today = datetime(2022, 10, 25)
 
 #only run the script if the date above is a weekday
 if today.weekday() == 0:
@@ -33,6 +34,7 @@ cursor.execute("""
         join stock on stock_strategy.stock_id = stock.id
         join strategy on stock_strategy.strategy_id = strategy.id
         where strategy.name like 'opening_range%'
+        order by stock_id ASC
     """)
 rows = cursor.fetchall()
 
@@ -76,7 +78,21 @@ for row in rows:
     # print(f"Current Price: {quote}")
 
     #round current price to closest dollar for ATM option strike price
-    strike_price = round(quote)
+    #this will not always calc the correct strike price and will cause the option symbol to not be found
+    # strike_price = round(quote)
+
+    #get list of strike prices and calc at the money strike that is closest to the current price
+    #TODO this will not work if the closest strike price is not a whole number like 152.5
+    response = requests.get('https://sandbox.tradier.com/v1/markets/options/strikes',
+        params={'symbol': symbol, 'expiration': expiration},
+        headers={'Authorization': f'Bearer {TRADIER_SANDBOX_KEY}', 'Accept': 'application/json'}
+    )
+    json_response = response.json()
+    # print(response.status_code)
+    strike_list = json_response["strikes"]["strike"]
+    # print(strike_list)
+    strike_price = round(min(strike_list, key=lambda x:abs(x-quote)))
+    # print(f"calculated strike price: {strike_price}")
 
     #init symbol vars to build option symbol
     expiration_symbol = expiration.strftime("%y%m%d")
@@ -92,7 +108,7 @@ for row in rows:
         #build option symbol
         option_symbol = symbol + expiration_symbol + call + strike_symbol + '000'
 
-        # print(option_symbol)
+        print(option_symbol)
 
         try:
             #send request to get available option chains
@@ -187,6 +203,8 @@ for row in rows:
 
                 #send email with order details
                 notify(message)
+            else:
+                print(f"{option_symbol} not found in option chain list")
         except Exception as e:
             print(f"no {strategy} entry for {symbol}")
             # print(e)
@@ -199,7 +217,7 @@ for row in rows:
 
         option_symbol = symbol + expiration_symbol + put + strike_symbol + '000'
 
-        # print(option_symbol)
+        print(option_symbol)
 
         try:
             response = requests.get('https://sandbox.tradier.com/v1/markets/options/chains',
@@ -280,6 +298,8 @@ for row in rows:
                 message=f"placing {strategy} order for {option_symbol} at {option_limit_price}, {symbol} closed below {opening_range_low}, at {breakdown_signal.index[0]}"
                 print(message)
                 notify(message)
+            else:
+                print(f"{option_symbol} not found in option chain list")
         except Exception as e:
             # print(e)
             print(f"no {strategy} entry for {symbol}")
